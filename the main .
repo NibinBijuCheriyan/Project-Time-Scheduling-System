@@ -1,0 +1,158 @@
+from datetime import datetime, date
+import json
+import os
+
+class Project:
+    def __init__(self, name, deadline, description=""):
+        self.name = name
+        self.deadline = deadline
+        self.description = description
+        self.completed = False
+
+class ProjectScheduler:
+    def __init__(self, filename="projects.json"):
+        self.filename = filename
+        self.projects = {}
+        self.load_projects()
+
+    def load_projects(self):
+        """Load projects from JSON file if it exists."""
+        if os.path.exists(self.filename):
+            with open(self.filename, 'r') as file:
+                data = json.load(file)
+                for project_name, project_data in data.items():
+                    deadline = datetime.strptime(project_data['deadline'], '%Y-%m-%d').date()
+                    project = Project(
+                        project_name,
+                        deadline,
+                        project_data.get('description', '')
+                    )
+                    project.completed = project_data.get('completed', False)
+                    self.projects[project_name] = project
+
+    def save_projects(self):
+        """Save projects to JSON file."""
+        data = {}
+        for name, project in self.projects.items():
+            data[name] = {
+                'deadline': project.deadline.strftime('%Y-%m-%d'),
+                'description': project.description,
+                'completed': project.completed
+            }
+        with open(self.filename, 'w') as file:
+            json.dump(data, file, indent=4)
+
+    def add_project(self, name, deadline_str, description=""):
+        """Add a new project."""
+        try:
+            deadline = datetime.strptime(deadline_str, '%Y-%m-%d').date()
+            if deadline < date.today():
+                return False, "Deadline cannot be in the past"
+            
+            if name in self.projects:
+                return False, "Project with this name already exists"
+            
+            self.projects[name] = Project(name, deadline, description)
+            self.save_projects()
+            return True, "Project added successfully"
+        except ValueError:
+            return False, "Invalid date format. Use YYYY-MM-DD"
+
+    def remove_project(self, name):
+        """Remove a project."""
+        if name in self.projects:
+            del self.projects[name]
+            self.save_projects()
+            return True, "Project removed successfully"
+        return False, "Project not found"
+
+    def mark_completed(self, name):
+        """Mark a project as completed."""
+        if name in self.projects:
+            self.projects[name].completed = True
+            self.save_projects()
+            return True, "Project marked as completed"
+        return False, "Project not found"
+
+    def get_upcoming_deadlines(self, days=7):
+        """Get projects with deadlines within specified days."""
+        today = date.today()
+        upcoming = []
+        for project in self.projects.values():
+            if not project.completed:
+                days_remaining = (project.deadline - today).days
+                if 0 <= days_remaining <= days:
+                    upcoming.append((project.name, project.deadline, days_remaining))
+        return sorted(upcoming, key=lambda x: x[1])
+
+    def display_all_projects(self):
+        """Display all projects and their details."""
+        if not self.projects:
+            return "No projects found"
+        
+        output = "Current Projects:\n" + "-" * 50 + "\n"
+        for project in sorted(self.projects.values(), key=lambda x: x.deadline):
+            status = "Completed" if project.completed else "In Progress"
+            days_remaining = (project.deadline - date.today()).days
+            output += f"Name: {project.name}\n"
+            output += f"Deadline: {project.deadline}\n"
+            output += f"Days Remaining: {days_remaining}\n"
+            output += f"Status: {status}\n"
+            if project.description:
+                output += f"Description: {project.description}\n"
+            output += "-" * 50 + "\n"
+        return output
+
+def main():
+    scheduler = ProjectScheduler()
+    
+    while True:
+        print("\nProject Scheduler Menu:")
+        print("1. Add Project")
+        print("2. Remove Project")
+        print("3. Mark Project as Completed")
+        print("4. View Upcoming Deadlines")
+        print("5. View All Projects")
+        print("6. Exit")
+        
+        choice = input("Enter your choice (1-6): ")
+        
+        if choice == "1":
+            name = input("Enter project name: ")
+            deadline = input("Enter deadline (YYYY-MM-DD): ")
+            description = input("Enter project description (optional): ")
+            success, message = scheduler.add_project(name, deadline, description)
+            print(message)
+            
+        elif choice == "2":
+            name = input("Enter project name to remove: ")
+            success, message = scheduler.remove_project(name)
+            print(message)
+            
+        elif choice == "3":
+            name = input("Enter project name to mark as completed: ")
+            success, message = scheduler.mark_completed(name)
+            print(message)
+            
+        elif choice == "4":
+            days = int(input("Enter number of days to look ahead: "))
+            upcoming = scheduler.get_upcoming_deadlines(days)
+            if upcoming:
+                print("\nUpcoming Deadlines:")
+                for name, deadline, days_remaining in upcoming:
+                    print(f"{name}: {deadline} ({days_remaining} days remaining)")
+            else:
+                print("No upcoming deadlines found")
+                
+        elif choice == "5":
+            print(scheduler.display_all_projects())
+            
+        elif choice == "6":
+            print("Goodbye!")
+            break
+            
+        else:
+            print("Invalid choice. Please try again.")
+
+if __name__ == "__main__":
+    main()
